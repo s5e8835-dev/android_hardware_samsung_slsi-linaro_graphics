@@ -36,6 +36,8 @@
 
 #define IDMA(x) static_cast<decon_idma_type>(x)
 
+#define HAS_FINGERPRINT_MASK_LAYER
+
 enum {
     HWC_DISPLAY_NONE_BIT = 0
 };

@@ -18,6 +18,8 @@
 #include "ExynosHWCDebug.h"
 #include "ExynosLayer.h"
 
+#include <vector>
+
 ExynosPrimaryDisplayModule::ExynosPrimaryDisplayModule(DisplayIdentifier node)
     :    ExynosPrimaryDisplay(node)
 {
@@ -83,4 +85,66 @@ void ExynosPrimaryDisplayModule::resetForDestroyClient() {
     mVsyncCallback.resetVsyncTimeStamp();
     mVsyncCallback.resetDesiredVsyncPeriod();
     mVsyncCallback.enableVSync(0);
+}
+
+/*
+ * SystemUI keeps the UDFPS dim layer up for as long as the overlay is shown, which would put
+ * the panel at mask_brightness behind it on the whole lockscreen. Only engage the fingerprint
+ * mask while the pressed (illumination) layer is on screen, and keep the dim layer transparent
+ * until then.
+ *
+ * Screen-off presses show the pressed layer without any dim layer. Engage the mask from here
+ * then and hide every other window, so only the sensor lights up.
+ */
+int ExynosPrimaryDisplayModule::deliverWinConfigData(DevicePresentInfo &presentInfo) {
+    ExynosLayer *pressedLayer = nullptr;
+    bool hasDimLayer = false;
+    for (size_t i = 0; i < mLayers.size(); i++) {
+        if (mLayers[i]->mZOrder & UDFPS_PRESSED_LAYER_ZORDER)
+            pressedLayer = mLayers[i];
+        else if (mLayers[i]->mZOrder == UDFPS_DIM_LAYER_ZORDER)
+            hasDimLayer = true;
+    }
+
+    ExynosLayer *screenOffPressedLayer = nullptr;
+    uint32_t screenOffPressedZOrder = 0;
+    if (pressedLayer && !hasDimLayer &&
+        (pressedLayer->mExynosCompositionType == HWC2_COMPOSITION_DEVICE)) {
+        int32_t pressedWindow = pressedLayer->mWindowIndex;
+        if ((pressedWindow >= 0) && (pressedWindow < (int32_t)mDpuData.configs.size())) {
+            for (size_t j = 0; j < mDpuData.configs.size(); j++) {
+                if ((int32_t)j != pressedWindow)
+                    mDpuData.configs[j].plane_alpha = 0;
+            }
+            /* Let the common code raise the fingerprint mask for this frame only */
+            screenOffPressedLayer = pressedLayer;
+            screenOffPressedZOrder = pressedLayer->mZOrder;
+            pressedLayer->mZOrder = UDFPS_DIM_LAYER_ZORDER;
+        }
+    }
+
+    std::vector<ExynosLayer *> idleDimLayers;
+    if (!pressedLayer) {
+        for (size_t i = 0; i < mLayers.size(); i++) {
+            ExynosLayer *layer = mLayers[i];
+            int32_t windowIndex = layer->mWindowIndex;
+            if ((layer->mZOrder != UDFPS_DIM_LAYER_ZORDER) ||
+                (layer->mExynosCompositionType != HWC2_COMPOSITION_DEVICE) ||
+                (windowIndex < 0) || (windowIndex >= (int32_t)mDpuData.configs.size()))
+                continue;
+            mDpuData.configs[windowIndex].plane_alpha = 0;
+            /* Hide it from the fingerprint mask lookup for this frame only */
+            layer->mZOrder = UDFPS_DIM_LAYER_ZORDER - 1;
+            idleDimLayers.push_back(layer);
+        }
+    }
+
+    int ret = ExynosPrimaryDisplay::deliverWinConfigData(presentInfo);
+
+    for (ExynosLayer *layer : idleDimLayers)
+        layer->mZOrder = UDFPS_DIM_LAYER_ZORDER;
+    if (screenOffPressedLayer)
+        screenOffPressedLayer->mZOrder = screenOffPressedZOrder;
+
+    return ret;
 }

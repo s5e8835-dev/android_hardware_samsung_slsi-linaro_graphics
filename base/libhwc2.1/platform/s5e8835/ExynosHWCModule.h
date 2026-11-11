@@ -38,6 +38,14 @@
 
 #define HAS_FINGERPRINT_MASK_LAYER
 
+/* Must match samsungUdfpsVars in the device tree */
+#ifndef UDFPS_DIM_LAYER_ZORDER
+#define UDFPS_DIM_LAYER_ZORDER 0xff
+#endif
+#ifndef UDFPS_PRESSED_LAYER_ZORDER
+#define UDFPS_PRESSED_LAYER_ZORDER 0x100u
+#endif
+
 enum {
     HWC_DISPLAY_NONE_BIT = 0
 };

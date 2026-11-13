@@ -40,6 +40,33 @@ uint32_t ExynosMPPModule::getDstWidthAlign(struct exynos_image &dst)
     return ExynosMPP::getDstWidthAlign(dst);
 }
 
+static bool isSdrGammaTransfer(uint32_t transfer)
+{
+    return (transfer == HAL_DATASPACE_TRANSFER_UNSPECIFIED) ||
+           (transfer == HAL_DATASPACE_TRANSFER_SRGB) ||
+           (transfer == HAL_DATASPACE_TRANSFER_SMPTE_170M) ||
+           (transfer == HAL_DATASPACE_TRANSFER_GAMMA2_2);
+}
+
+/*
+ * SDR video (e.g. BT.709 / SMPTE 170M) shown on an sRGB output only differs in the transfer
+ * label, which needs no wide colour gamut conversion. Without this, the MSC refuses such layers
+ * and every video frame gets composed by the GPU instead.
+ */
+bool ExynosMPPModule::isDataspaceSupportedByMPP(struct exynos_image &src, struct exynos_image &dst)
+{
+    uint32_t srcStandard = (src.dataSpace & HAL_DATASPACE_STANDARD_MASK);
+    uint32_t dstStandard = (dst.dataSpace & HAL_DATASPACE_STANDARD_MASK);
+    uint32_t srcTransfer = (src.dataSpace & HAL_DATASPACE_TRANSFER_MASK);
+    uint32_t dstTransfer = (dst.dataSpace & HAL_DATASPACE_TRANSFER_MASK);
+
+    if (!hasHdrInfo(src) && (srcStandard == dstStandard) &&
+        isSdrGammaTransfer(srcTransfer) && isSdrGammaTransfer(dstTransfer))
+        return true;
+
+    return ExynosMPP::isDataspaceSupportedByMPP(src, dst);
+}
+
 uint32_t ExynosMPPModule::getSrcMaxCropWidth(struct exynos_image &src)
 {
     if ((mPhysicalType == MPP_DPP_VGFS) && (src.compressionInfo.type == COMP_TYPE_AFBC))

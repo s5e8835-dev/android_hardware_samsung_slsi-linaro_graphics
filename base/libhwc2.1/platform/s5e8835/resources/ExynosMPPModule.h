@@ -27,6 +27,7 @@ class ExynosMPPModule : public ExynosMPP {
         ~ExynosMPPModule();
         virtual uint32_t getSrcMaxCropWidth(struct exynos_image &src);
         virtual uint32_t getDstWidthAlign(struct exynos_image &dst);
+        virtual bool isDataspaceSupportedByMPP(struct exynos_image &src, struct exynos_image &dst);
 };
 
 #endif

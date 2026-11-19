@@ -83,7 +83,6 @@ cc_binary {
 
     header_libs: [
         "android.hardware.graphics.composer3-command-buffer",
-        "libgralloc4_headers_exynos",
         "libhdrinterface_header",
     ] + select(soong_config_variable("exynos_hwc", "uses_display_color_interface"), {
         true: ["libdisplaycolor_interface"],
